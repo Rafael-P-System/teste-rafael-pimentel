@@ -1,0 +1,47 @@
+import csv
+import sqlite3
+from collections import defaultdict
+
+# Conexão com banco
+conn = sqlite3.connect("operadoras.db")
+cursor = conn.cursor()
+
+# Consulta dados enriquecidos
+cursor.execute("SELECT cnpj, razao_social, uf, despesa FROM operadoras_enriquecidas")
+rows = cursor.fetchall()
+
+# Estrutura para agregação
+agregado = defaultdict(lambda: {"total": 0, "count": 0})
+
+for cnpj, razao, uf, despesa in rows:
+    chave = (razao, uf)
+    despesa = float(despesa) if despesa else 0
+    agregado[chave]["total"] += despesa
+    agregado[chave]["count"] += 1
+
+# Calcular média por trimestre e proporção
+resultado = []
+for (razao, uf), valores in agregado.items():
+    total = valores["total"]
+    count = valores["count"]
+    media_trimestre = total / count if count > 0 else 0
+    proporcao = total / sum(v["total"] for v in agregado.values()) if sum(v["total"] for v in agregado.values()) > 0 else 0
+
+    resultado.append({
+        "RazaoSocial": razao,
+        "UF": uf,
+        "TotalDespesa": round(total, 2),
+        "MediaTrimestre": round(media_trimestre, 2),
+        "Proporcao": round(proporcao, 4)
+    })
+
+# Ordenar por total de despesas (maior para menor)
+resultado.sort(key=lambda x: x["TotalDespesa"], reverse=True)
+
+# Salvar em CSV
+with open("despesas_agregadas.csv", "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=["RazaoSocial", "UF", "TotalDespesa", "MediaTrimestre", "Proporcao"])
+    writer.writeheader()
+    writer.writerows(resultado)
+
+print("Arquivo despesas_agregadas.csv gerado com sucesso!")
